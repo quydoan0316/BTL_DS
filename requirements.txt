@@ -1,0 +1,7 @@
+kafka-python==2.3.0
+psycopg2-binary==2.9.11
+numpy==2.3.5
+scikit-learn==1.8.0
+scipy==1.16.3
+joblib==1.5.2
+threadpoolctl==3.6.0
