@@ -12,9 +12,7 @@
 
 ## 1. Tổng Quan Kiến Trúc
 
-```
 ![alt text](image.png)
-```
 
 ---
 
