@@ -25,14 +25,14 @@ logger = logging.getLogger("db-writer")
 class DatabaseWriter:
     """
     Thread-safe database writer with batch inserts.
-    
+
     Features:
     - Background thread for async writes
     - Batch inserts for efficiency
     - Automatic reconnection on failure
     - Queue-based buffering
     """
-    
+
     def __init__(
         self,
         conn_str: str = CONN_STR,
@@ -62,7 +62,7 @@ class DatabaseWriter:
             "DatabaseWriter initialized: table=%s, batch_size=%d",
             table_name, batch_size
         )
-    
+
     def _connect(self):
         """Establish database connection with retries."""
         max_retries = 5
@@ -87,13 +87,12 @@ class DatabaseWriter:
                     retry_delay *= 2  # Exponential backoff
         
         raise RuntimeError("Failed to connect to database after retries")
-    
+
     def _ensure_connection(self) -> None:
         """Ensure database connection is active."""
         if self._conn is None or self._conn.closed:
             self._conn = self._connect()
             self._ensure_table()
-    
     def _ensure_table(self) -> None:
         """Create table if not exists."""
         create_sql = f"""
@@ -132,7 +131,7 @@ class DatabaseWriter:
         except Exception as e:
             logger.error("Failed to create table: %s", e)
             raise
-    
+
     def _build_insert_params(self, records: List[Dict[str, Any]]) -> List[tuple]:
         """Convert record dictionaries to tuple format for insert."""
         params = []
@@ -157,7 +156,7 @@ class DatabaseWriter:
                 r.get("producer_region"),
             ))
         return params
-    
+
     def _write_batch(self, records: List[Dict[str, Any]]) -> int:
         """
         Write a batch of records to database.
@@ -173,26 +172,26 @@ class DatabaseWriter:
         sql = f"""
         INSERT INTO {self.table_name}
         (id, sampling_point, sample_time, determinand, value, unit,
-         violation, violations, easting, northing, latitude, longitude,
-         region, raw_data, predicted_value, predicted_model, producer_region)
+            violation, violations, easting, northing, latitude, longitude,
+    region, raw_data, predicted_value, predicted_model, producer_region)
         VALUES %s
         ON CONFLICT (id) DO UPDATE SET
-           sampling_point = EXCLUDED.sampling_point,
-           sample_time = EXCLUDED.sample_time,
-           determinand = EXCLUDED.determinand,
-           value = EXCLUDED.value,
-           unit = EXCLUDED.unit,
-           violation = EXCLUDED.violation,
-           violations = EXCLUDED.violations,
-           easting = EXCLUDED.easting,
-           northing = EXCLUDED.northing,
-           latitude = EXCLUDED.latitude,
-           longitude = EXCLUDED.longitude,
-           region = EXCLUDED.region,
-           raw_data = EXCLUDED.raw_data,
-           predicted_value = EXCLUDED.predicted_value,
-           predicted_model = EXCLUDED.predicted_model,
-           producer_region = EXCLUDED.producer_region;
+            sampling_point = COALESCE(EXCLUDED.sampling_point, {self.table_name}.sampling_point),
+            sample_time = COALESCE(EXCLUDED.sample_time, {self.table_name}.sample_time),
+            determinand = COALESCE(EXCLUDED.determinand, {self.table_name}.determinand),
+            value = COALESCE(EXCLUDED.value, {self.table_name}.value),
+            unit = COALESCE(EXCLUDED.unit, {self.table_name}.unit),
+            violation = COALESCE(EXCLUDED.violation, {self.table_name}.violation),
+            violations = COALESCE(EXCLUDED.violations, {self.table_name}.violations),
+            easting = COALESCE(EXCLUDED.easting, {self.table_name}.easting),
+            northing = COALESCE(EXCLUDED.northing, {self.table_name}.northing),
+            latitude = COALESCE(EXCLUDED.latitude, {self.table_name}.latitude),
+            longitude = COALESCE(EXCLUDED.longitude, {self.table_name}.longitude),
+            region = COALESCE(EXCLUDED.region, {self.table_name}.region),
+            raw_data = COALESCE(EXCLUDED.raw_data, {self.table_name}.raw_data),
+            predicted_value = COALESCE(EXCLUDED.predicted_value, {self.table_name}.predicted_value),
+            predicted_model = COALESCE(EXCLUDED.predicted_model, {self.table_name}.predicted_model),
+            producer_region = COALESCE(EXCLUDED.producer_region, {self.table_name}.producer_region);
         """
         
         try:
@@ -206,7 +205,7 @@ class DatabaseWriter:
             logger.error("Database error during batch write: %s", e)
             self._conn = None  # Force reconnection
             raise
-    
+
     def _worker_loop(self) -> None:
         """Background worker loop for processing queue."""
         logger.info("Database writer worker started")
@@ -235,11 +234,10 @@ class DatabaseWriter:
             except Exception as e:
                 logger.exception("Worker error: %s", e)
                 time.sleep(1)
-        
-        # Flush remaining items on shutdown
+    # Flush remaining items on shutdown
         self._flush_remaining()
         logger.info("Database writer worker stopped")
-    
+
     def _flush_remaining(self) -> None:
         """Flush remaining items in queue on shutdown."""
         remaining = []
@@ -255,7 +253,7 @@ class DatabaseWriter:
                 logger.info("Flushed %d remaining records", count)
             except Exception as e:
                 logger.error("Failed to flush remaining records: %s", e)
-    
+
     def start(self) -> None:
         """Start the background writer thread."""
         if self._worker_thread and self._worker_thread.is_alive():
@@ -270,7 +268,7 @@ class DatabaseWriter:
         )
         self._worker_thread.start()
         logger.info("Database writer started")
-    
+
     def stop(self) -> None:
         """Stop the background writer thread."""
         self._stop_event.set()
@@ -279,7 +277,7 @@ class DatabaseWriter:
         if self._conn:
             self._conn.close()
         logger.info("Database writer stopped")
-    
+
     def write(self, record: Dict[str, Any]) -> bool:
         """
         Queue a record for writing.
@@ -296,7 +294,7 @@ class DatabaseWriter:
         except queue.Full:
             logger.warning("Queue full, dropping record: %s", record.get("id"))
             return False
-    
+
     def write_many(self, records: List[Dict[str, Any]]) -> int:
         """
         Queue multiple records for writing.
@@ -312,17 +310,17 @@ class DatabaseWriter:
             if self.write(record):
                 count += 1
         return count
-    
+
     @property
     def queue_size(self) -> int:
         """Current number of items in queue."""
         return self._queue.qsize()
-    
+
     def __enter__(self):
         """Context manager entry."""
         self.start()
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
         self.stop()
