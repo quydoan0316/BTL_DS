@@ -5,7 +5,8 @@ Hệ thống giám sát chất lượng nước theo kiến trúc **event-driven
 ## Kiến trúc
 
 ```
-![alt text](image.png)
+<img width="2277" height="633" alt="image" src="https://github.com/user-attachments/assets/8a543a3d-3845-4929-9a20-7cae1aea5d12" />
+
 ```
 
 ## Cấu trúc thư mục
