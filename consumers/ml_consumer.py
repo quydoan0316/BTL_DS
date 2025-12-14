@@ -329,8 +329,6 @@ class OnlineMLConsumer:
             cur.close()
             conn.close()
             
-            if len(rows) < TRAIN_THRESHOLD:
-                return
             
             # Build features
             times = [r[0] for r in rows]
@@ -401,7 +399,7 @@ class OnlineMLConsumer:
                 return
             
             # Get prediction
-            prev_value = None  # Could fetch from DB, but simplified here
+            prev_value = value  # Could fetch from DB, but simplified here
             predicted, model_name = self._predict_with_best_model(sample_time, prev_value)
             
             self.prediction_count += 1

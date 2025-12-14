@@ -35,7 +35,7 @@ GROUP_VIOLATION = os.getenv("GROUP_VIOLATION", "violation-group")
 # Local PostgreSQL connection string
 CONN_STR = os.getenv(
     "CONN_STR",
-    "postgresql://postgres:admin@host.docker.internal:5433/hpb"
+    "postgresql://neondb_owner:npg_vSVkYdKPj6Q2@ep-silent-water-a1q1b7so-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 )
 
 # Database writer settings
