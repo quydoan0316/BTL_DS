@@ -1,224 +1,204 @@
-# Water Quality Monitoring System
+# Water Quality Monitoring System - Multi-Producer & Multi-Consumer Architecture
 
-Hệ thống giám sát chất lượng nước sử dụng Kafka để streaming dữ liệu và Machine Learning để dự đoán BOD ATU.
+Hệ thống giám sát chất lượng nước theo kiến trúc **event-driven phân tán** với Apache Kafka.
 
-## Kiến trúc
+## 🏗️ Kiến trúc
 
 ```
-CSV File → Producer → Kafka → Consumer → PostgreSQL (Neon)
-                                  ↓
-                            ML Models (SGD + RandomForest)
+┌─────────────────────────────────────────────────────────────────────┐
+│                         IoT PRODUCERS                                │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐   │
+│  │ AN Region│ │ SO Region│ │ SW Region│ │ NW Region│ │ MD Region│   │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘   │
+└───────┼────────────┼────────────┼────────────┼────────────┼─────────┘
+        │            │            │            │            │
+        ▼            ▼            ▼            ▼            ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                     [water-quality-raw]                              │
+└───────────────────────────────┬─────────────────────────────────────┘
+                                ▼
+                    ┌───────────────────────┐
+                    │  Preprocess Consumer  │
+                    │  - Parse JSON         │
+                    │  - Convert coords     │
+                    │  - Assign region      │
+                    └───────────┬───────────┘
+                                ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                   [water-quality-enriched]                           │
+└───────┬───────────────────────┬───────────────────────┬─────────────┘
+        ▼                       ▼                       ▼
+┌───────────────┐       ┌───────────────┐       ┌───────────────┐
+│  ML Consumer  │       │   Violation   │       │     Spark     │
+│  - SGD online │       │   Consumer    │       │   Streaming   │
+│  - RF retrain │       │  - UK limits  │       │ - Aggregation │
+└───────┬───────┘       └───────┬───────┘       └───────┬───────┘
+        ▼                       ▼                       ▼
+[water-quality      [water-quality        [water-quality
+  -prediction]        -violation]           -metrics]
+        │                   │                     │
+        └───────────────────┼─────────────────────┘
+                            ▼
+                    ┌───────────────┐
+                    │  PostgreSQL   │
+                    │    (Neon)     │
+                    └───────┬───────┘
+                            ▼
+                    ┌───────────────┐
+                    │   Grafana     │
+                    │  Dashboard    │
+                    └───────────────┘
 ```
 
-## Yêu cầu
+## 📁 Cấu trúc thư mục
 
-- Docker và Docker Compose
-- File dữ liệu `2025-C.csv` trong thư mục gốc
-- PostgreSQL database (Neon hoặc local)
+```
+BTL_DS/
+├── producers/                    # Multi-producer IoT simulation
+│   ├── base_producer.py          # Base class
+│   ├── region_producer.py        # Region-specific producer
+│   ├── run_all_producers.py      # Parallel orchestrator
+│   ├── Dockerfile
+│   └── requirements.txt
+│
+├── consumers/                    # Multi-consumer processing
+│   ├── preprocess_consumer.py    # Consumer 1: Data enrichment
+│   ├── ml_consumer.py            # Consumer 2: ML prediction
+│   ├── violation_consumer.py     # Consumer 3: Rule-based alerts
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── utils/
+│       ├── config.py             # Centralized config
+│       ├── coordinate_utils.py   # OSGB36 → WGS84
+│       └── db_writer.py          # Thread-safe DB writer
+│
+├── spark/                        # Spark analytics
+│   ├── spark_streaming.py        # Real-time aggregation
+│   └── spark_batch_ml.py         # Batch ML training
+│
+├── docs/
+│   └── DEPLOYMENT_GUIDE.md      # Chi tiết deploy local và AWS
+│
+├── scripts/
+│   ├── create_topics.sh          # Create Kafka topics
+│   ├── run_demo.sh               # Demo runner
+│   ├── aws_setup.sh              # AWS EC2 setup script
+│   └── deploy.sh                 # One-command AWS deploy
+│
+├── grafana/                      # Dashboard provisioning
+├── docker-compose.yml            # Local development
+├── docker-compose.aws.yml        # AWS production
+├── .env.example                  # Environment template
+└── 2025-C.csv                    # Data source
+```
 
-## Cấu hình môi trường
+## 📚 Tài Liệu
 
-### Bước 1: Tạo file .env
+| Tài liệu | Mô tả |
+|----------|-------|
+| [DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md) | Hướng dẫn chi tiết chạy demo local và deploy AWS |
+| [docker-compose.aws.yml](docker-compose.aws.yml) | Docker Compose cho AWS với PostgreSQL |
 
-Sao chép file `.env.example` thành `.env`:
+## 🚀 Quick Start
+
+### 1. Khởi động infrastructure
+
+```bash
+# Start Kafka và Grafana
+docker-compose up -d zookeeper kafka grafana
+
+# Đợi Kafka ready (~10s)
+sleep 10
+
+# Tạo topics
+bash scripts/create_topics.sh
+```
+
+### 2. Khởi động consumers
+
+```bash
+docker-compose up -d preprocess-consumer ml-consumer violation-consumer
+```
+
+### 3. Chạy producers
+
+**Option A: Chạy local (recommended cho demo)**
+```bash
+cd producers
+pip install -r requirements.txt
+
+# Chạy 1 region
+python region_producer.py --region AN --limit 100
+
+# Hoặc chạy tất cả regions
+python run_all_producers.py --limit 100
+```
+
+**Option B: Chạy trong Docker**
+```bash
+docker-compose --profile producers up -d
+```
+
+### 4. Xem kết quả
+
+- **Grafana**: http://localhost:3000 (admin/admin)
+- **Kafka topics**: `docker exec btl_ds-kafka-1 kafka-topics --list --bootstrap-server localhost:9092`
+
+## 📊 Kafka Topics
+
+| Topic | Partitions | Mô tả |
+|-------|------------|-------|
+| `water-quality-raw` | 5 | Dữ liệu gốc từ producers |
+| `water-quality-enriched` | 5 | Đã chuẩn hóa, có tọa độ |
+| `water-quality-prediction` | 3 | Kết quả ML dự báo |
+| `water-quality-violation` | 3 | Cảnh báo vi phạm |
+| `water-quality-metrics` | 3 | Aggregations từ Spark |
+
+## 🔧 Cấu hình
+
+Copy `.env.example` thành `.env` và điều chỉnh:
 
 ```bash
 cp .env.example .env
 ```
 
-### Bước 2: Chỉnh sửa .env
+Các biến quan trọng:
+- `CONN_STR`: Connection string PostgreSQL
+- `KAFKA_BOOTSTRAP`: Kafka server address
+- `TRAIN_THRESHOLD`: Số samples tối thiểu để train RandomForest
 
-Mở file `.env` và cập nhật các giá trị:
-
-```bash
-# Thay đổi connection string PostgreSQL của bạn
-CONN_STR=postgresql://your_user:your_password@your_host/your_database?sslmode=require
-```
-
-## Cách chạy
-
-### Chạy với Docker Compose (Khuyến nghị)
+## 🧪 Kiểm tra
 
 ```bash
-# Build và start tất cả services
-docker-compose up --build
+# Xem messages trong topic
+docker exec btl_ds-kafka-1 kafka-console-consumer \
+    --topic water-quality-enriched \
+    --bootstrap-server localhost:9092 \
+    --from-beginning --max-messages 5
 
-# Hoặc chạy ở background
-docker-compose up --build -d
-
-# Xem logs
-docker-compose logs -f
-
-# Xem logs của service cụ thể
-docker-compose logs -f producer
-docker-compose logs -f consumer
-
-# Dừng services
-docker-compose down
+# Xem logs consumer
+docker-compose logs -f ml-consumer
 ```
 
-### Chạy không dùng Docker (Local)
+## 📈 UK Regulatory Limits
 
-#### 1. Khởi động Kafka infrastructure
+| Determinand | Limit | Unit |
+|-------------|-------|------|
+| BOD ATU | 20.0 | mg/L |
+| Ammonia (N) | 5.0 | mg/L |
+| Oil | 10.0 | mg/L |
+| Lead - as Pb | 0.5 | mg/L |
 
-```bash
-docker-compose up -d zookeeper kafka
-```
+## 👥 Regions
 
-#### 2. Cài đặt dependencies
+| Prefix | Region | Delay |
+|--------|--------|-------|
+| AN | Anglian | 1.0s |
+| SO | Southern | 0.8s |
+| SW | South West | 1.2s |
+| NW | North West | 0.9s |
+| MD | Midlands/Other | 1.5s |
 
-```bash
-pip install -r requirements.txt
-```
+---
 
-#### 3. Chạy Producer
-
-```bash
-# Set environment variable (Windows)
-set KAFKA_BOOTSTRAP=localhost:9092
-
-# Hoặc (Git Bash/Linux)
-export KAFKA_BOOTSTRAP=localhost:9092
-
-# Chạy producer
-python producer_csv.py
-```
-
-#### 4. Chạy Consumer (trong terminal khác)
-
-```bash
-cd analyze
-
-# Set environment variables
-set KAFKA_BOOTSTRAP=localhost:9092
-set CONN_STR=your_postgresql_connection_string
-
-# Chạy consumer
-python consumer.py
-```
-
-## Services
-
-### Zookeeper
-- Port: `2181`
-- Quản lý Kafka cluster
-
-### Kafka
-- Internal port: `29092` (dùng bởi containers)
-- External port: `9092` (dùng từ host machine)
-- Topic: `water-quality`
-
-### Producer
-- Đọc file `2025-C.csv`
-- Stream từng dòng vào Kafka topic mỗi giây
-- Có thể tùy chỉnh `SLEEP_SECONDS` trong `.env`
-
-### Consumer
-- Consume messages từ Kafka
-- Train ML models:
-  - **Online model**: SGDRegressor (realtime learning)
-  - **Offline model**: RandomForest (background training sau 500+ samples)
-- Dự đoán BOD ATU values
-- Lưu vào PostgreSQL với predictions
-- Models được lưu trong `./analyze/models/`
-
-## Cấu trúc dữ liệu
-
-### Input (CSV)
-Các cột quan trọng:
-- `@id`: Unique identifier
-- `sample.samplingPoint.label`: Điểm lấy mẫu
-- `sample.sampleDateTime`: Thời gian lấy mẫu
-- `determinand.label`: Loại chất đo (BOD ATU, Ammonia, etc.)
-- `result`: Giá trị đo được
-- `sample.samplingPoint.easting/northing`: Tọa độ OSGB36
-
-### Output (PostgreSQL)
-Table: `water_quality`
-- Thông tin cơ bản: id, sampling_point, sample_time, determinand, value
-- Tọa độ: easting, northing, latitude, longitude, region
-- ML predictions: predicted_value, predicted_model
-- Metadata: violation status, raw_data
-
-## Troubleshooting
-
-### Kafka không start được
-
-```bash
-# Kiểm tra logs
-docker-compose logs kafka
-
-# Xóa volumes và restart
-docker-compose down -v
-docker-compose up --build
-```
-
-### Producer không kết nối được Kafka
-
-```bash
-# Đảm bảo Kafka đã sẵn sàng
-docker-compose logs kafka | grep "started"
-
-# Kiểm tra KAFKA_BOOTSTRAP variable
-echo $KAFKA_BOOTSTRAP
-```
-
-### Consumer không ghi được database
-
-- Kiểm tra `CONN_STR` trong `.env`
-- Đảm bảo database tồn tại và có quyền ghi
-- Xem logs: `docker-compose logs consumer`
-
-### Out of memory
-
-Nếu file CSV quá lớn (62MB như `2025-C.csv`), tăng memory cho Docker:
-- Docker Desktop > Settings > Resources > Memory: tăng lên 4GB+
-
-## Giám sát
-
-### Xem ML models
-
-```bash
-# List models đã train
-ls -lh analyze/models/
-```
-
-### Query database
-
-```sql
--- Số lượng records theo determinand
-SELECT determinand, COUNT(*) 
-FROM water_quality 
-GROUP BY determinand;
-
--- Xem predictions cho BOD ATU
-SELECT sample_time, value, predicted_value, predicted_model
-FROM water_quality
-WHERE determinand = 'BOD ATU' AND predicted_value IS NOT NULL
-ORDER BY sample_time DESC
-LIMIT 10;
-
--- Violations
-SELECT determinand, COUNT(*)
-FROM water_quality
-WHERE violation = true
-GROUP BY determinand;
-```
-
-## Phát triển
-
-### Thêm determinand mới để predict
-
-Chỉnh sửa `analyze/consumer.py`:
-1. Thêm limit vào `LIMITS` dict (dòng 55-61)
-2. Thêm logic prediction trong `parse_message()` (dòng 529-540)
-
-### Thay đổi ML model
-
-Chỉnh sửa `background_trainer()` trong `analyze/consumer.py`:
-- Thay đổi features (dòng 413-431)
-- Thay model (dòng 438)
-
-## License
-
-MIT
+**BTL Môn Hệ Phân Bố** - Kiến trúc Event-Driven với Apache Kafka

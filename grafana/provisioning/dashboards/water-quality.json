@@ -1,0 +1,231 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 15},
+              {"color": "red", "value": 20}
+            ]
+          },
+          "unit": "mg/L"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1,
+      "options": {
+        "legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom"},
+        "tooltip": {"mode": "single"}
+      },
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "PostgreSQL"},
+          "format": "time_series",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  sample_time AS \"time\",\n  value AS \"BOD ATU\"\nFROM water_quality\nWHERE determinand = 'BOD ATU'\n  AND sample_time >= $__timeFrom()\n  AND sample_time <= $__timeTo()\nORDER BY sample_time",
+          "refId": "A"
+        }
+      ],
+      "title": "BOD ATU Over Time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "red", "value": 1}
+            ]
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0},
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["sum"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(*) FROM water_quality WHERE violation = true AND sample_time >= $__timeFrom()",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Violations",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "mappings": []
+        }
+      },
+      "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["count"], "fields": "", "values": false}
+      },
+      "targets": [
+        {
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(*) FROM water_quality WHERE sample_time >= $__timeFrom()",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Records",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "mappings": [],
+          "unit": "mg/L"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 4,
+      "options": {
+        "legend": {"displayMode": "list", "placement": "bottom"},
+        "tooltip": {"mode": "single"}
+      },
+      "targets": [
+        {
+          "rawQuery": true,
+          "rawSql": "SELECT\n  window_start AS \"time\",\n  avg_value,\n  min_value,\n  max_value\nFROM water_quality_hourly_agg\nWHERE determinand = 'BOD ATU'\n  AND window_start >= $__timeFrom()\nORDER BY window_start",
+          "refId": "A"
+        }
+      ],
+      "title": "Hourly Aggregation (Spark)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 10},
+              {"color": "red", "value": 20}
+            ]
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 5,
+      "options": {
+        "displayMode": "lcd",
+        "orientation": "horizontal",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}
+      },
+      "targets": [
+        {
+          "rawQuery": true,
+          "rawSql": "SELECT determinand, AVG(value) as avg_value\nFROM water_quality\nWHERE sample_time >= $__timeFrom()\nGROUP BY determinand\nORDER BY avg_value DESC\nLIMIT 10",
+          "refId": "A"
+        }
+      ],
+      "title": "Average by Determinand",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "PostgreSQL"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null}
+            ]
+          }
+        }
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+      "id": 6,
+      "options": {
+        "footer": {"fields": "", "reducer": ["sum"], "show": false},
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "rawQuery": true,
+          "rawSql": "SELECT\n  sample_time,\n  sampling_point,\n  determinand,\n  value,\n  predicted_value,\n  predicted_model,\n  CASE WHEN violation THEN 'YES' ELSE 'NO' END as violation\nFROM water_quality\nWHERE sample_time >= $__timeFrom()\nORDER BY sample_time DESC\nLIMIT 50",
+          "refId": "A"
+        }
+      ],
+      "title": "Recent Records with Predictions",
+      "type": "table"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["water-quality", "kafka", "spark"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "Water Quality Monitoring",
+  "uid": "water-quality-main",
+  "version": 1,
+  "weekStart": ""
+}

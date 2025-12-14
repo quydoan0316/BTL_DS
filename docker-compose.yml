@@ -1,5 +1,9 @@
 version: "3.8"
+
 services:
+  # ===========================
+  # INFRASTRUCTURE
+  # ===========================
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.0
     environment:
@@ -17,6 +21,176 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_DELETE_TOPIC_ENABLE: "true"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+  # ===========================
+  # CONSUMERS
+  # ===========================
+  preprocess-consumer:
+    build: ./consumers
+    command: python preprocess_consumer.py
+    depends_on:
+      - kafka
+    environment:
+      - KAFKA_BOOTSTRAP=kafka:29092
+      - TOPIC_RAW=water-quality-raw
+      - TOPIC_ENRICHED=water-quality-enriched
+      - GROUP_PREPROCESS=preprocess-group
+      - CONN_STR=postgresql://postgres:admin@host.docker.internal:5433/hpb
+    restart: unless-stopped
+
+  ml-consumer:
+    build: ./consumers
+    command: python ml_consumer.py
+    depends_on:
+      - kafka
+      - preprocess-consumer
+    environment:
+      - KAFKA_BOOTSTRAP=kafka:29092
+      - TOPIC_ENRICHED=water-quality-enriched
+      - TOPIC_PREDICTION=water-quality-prediction
+      - GROUP_ML=ml-group
+      - CONN_STR=postgresql://postgres:admin@host.docker.internal:5433/hpb
+      - MODEL_DIR=/app/models
+    volumes:
+      - ml-models:/app/models
+    restart: unless-stopped
+
+  violation-consumer:
+    build: ./consumers
+    command: python violation_consumer.py
+    depends_on:
+      - kafka
+      - preprocess-consumer
+    environment:
+      - KAFKA_BOOTSTRAP=kafka:29092
+      - TOPIC_ENRICHED=water-quality-enriched
+      - TOPIC_VIOLATION=water-quality-violation
+      - GROUP_VIOLATION=violation-group
+      - CONN_STR=postgresql://postgres:admin@host.docker.internal:5433/hpb
+    restart: unless-stopped
+
+  # ===========================
+  # PRODUCERS (Optional - can run locally)
+  # ===========================
+  producer-an:
+    build: ./producers
+    command: python region_producer.py --region AN --csv /data/2025-C.csv
+    depends_on:
+      - kafka
+    environment:
+      - KAFKA_BOOTSTRAP=kafka:29092
+      - KAFKA_TOPIC_RAW=water-quality-raw
+    volumes:
+      - ./2025-C.csv:/data/2025-C.csv:ro
+    profiles:
+      - producers
+
+  producer-so:
+    build: ./producers
+    command: python region_producer.py --region SO --csv /data/2025-C.csv
+    depends_on:
+      - kafka
+    environment:
+      - KAFKA_BOOTSTRAP=kafka:29092
+      - KAFKA_TOPIC_RAW=water-quality-raw
+    volumes:
+      - ./2025-C.csv:/data/2025-C.csv:ro
+    profiles:
+      - producers
+
+  producer-sw:
+    build: ./producers
+    command: python region_producer.py --region SW --csv /data/2025-C.csv
+    depends_on:
+      - kafka
+    environment:
+      - KAFKA_BOOTSTRAP=kafka:29092
+      - KAFKA_TOPIC_RAW=water-quality-raw
+    volumes:
+      - ./2025-C.csv:/data/2025-C.csv:ro
+    profiles:
+      - producers
+
+  producer-nw:
+    build: ./producers
+    command: python region_producer.py --region NW --csv /data/2025-C.csv
+    depends_on:
+      - kafka
+    environment:
+      - KAFKA_BOOTSTRAP=kafka:29092
+      - KAFKA_TOPIC_RAW=water-quality-raw
+    volumes:
+      - ./2025-C.csv:/data/2025-C.csv:ro
+    profiles:
+      - producers
+
+  producer-md:
+    build: ./producers
+    command: python region_producer.py --region MD --csv /data/2025-C.csv
+    depends_on:
+      - kafka
+    environment:
+      - KAFKA_BOOTSTRAP=kafka:29092
+      - KAFKA_TOPIC_RAW=water-quality-raw
+    volumes:
+      - ./2025-C.csv:/data/2025-C.csv:ro
+    profiles:
+      - producers
+
+  # ===========================
+  # SPARK
+  # ===========================
+  spark-master:
+    image: apache/spark:3.5.0
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    ports:
+      - "8088:8080"
+      - "7077:7077"
+    volumes:
+      - ./spark:/app
+    environment:
+      - SPARK_NO_DAEMONIZE=true
+    profiles:
+      - spark
+
+  spark-worker:
+    image: apache/spark:3.5.0
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_NO_DAEMONIZE=true
+      - SPARK_WORKER_MEMORY=2G
+      - SPARK_WORKER_CORES=2
+    volumes:
+      - ./spark:/app
+    profiles:
+      - spark
+
+  # ===========================
+  # MONITORING
+  # ===========================
+  grafana:
+    image: grafana/grafana:10.2.0
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - POSTGRES_HOST=${POSTGRES_HOST:-localhost}
+      - POSTGRES_DB=${POSTGRES_DB:-neondb}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+
+volumes:
+  grafana-data:
+  ml-models:

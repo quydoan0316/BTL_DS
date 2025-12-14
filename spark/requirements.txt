@@ -1,0 +1,4 @@
+# Spark Dependencies for Water Quality Analytics
+
+pyspark==3.5.0
+py4j==0.10.9.7
