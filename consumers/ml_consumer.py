@@ -331,8 +331,6 @@ class OnlineMLConsumer:
             cur.close()
             conn.close()
             
-            if len(rows) < TRAIN_THRESHOLD:
-                return
             
             # Build features
             times = [r[0] for r in rows]
@@ -385,6 +383,7 @@ class OnlineMLConsumer:
     
     def process_message(self, msg) -> None:
         """Process a single message."""
+        import psycopg2
         try:
             data = msg.value
             self.message_count += 1
@@ -418,6 +417,7 @@ class OnlineMLConsumer:
             )
             row = cur.fetchone()
             prev_value = float(row[0]) if row else 0.0 
+            print("Previous value fetched from DB:", prev_value)
             cur.close()
             predicted, model_name = self._predict_with_best_model(sample_time, prev_value)
             
