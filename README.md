@@ -4,10 +4,12 @@ Hệ thống giám sát chất lượng nước theo kiến trúc **event-driven
 
 ## Kiến trúc
 
-```
+<img width="771" height="656" alt="Biểu đồ không có tiêu đề-Trang-2 drawio" src="https://github.com/user-attachments/assets/498b6720-82e6-412e-a244-b7c21efb9ec2" />
+
+## Pipeline
+
 <img width="2277" height="633" alt="image" src="https://github.com/user-attachments/assets/8a543a3d-3845-4929-9a20-7cae1aea5d12" />
 
-```
 
 ## Cấu trúc thư mục
 
