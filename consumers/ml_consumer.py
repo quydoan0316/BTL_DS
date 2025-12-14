@@ -289,13 +289,15 @@ class OnlineMLConsumer:
                 
                 logger.debug("BOD rows in DB: %d", count)
                 
-                if count >= TRAIN_THRESHOLD:
-                    self._train_offline_model()
-                else:
-                    logger.info(
-                        "Not enough data for training: %d/%d",
-                        count, TRAIN_THRESHOLD
-                    )
+                self._train_offline_model()
+
+                # if count >= TRAIN_THRESHOLD:
+                #     self._train_offline_model()
+                # else:
+                #     logger.info(
+                #         "Not enough data for training: %d/%d",
+                #         count, TRAIN_THRESHOLD
+                #     )
                 
             except Exception as e:
                 logger.exception("Trainer error: %s", e)
@@ -401,7 +403,22 @@ class OnlineMLConsumer:
                 return
             
             # Get prediction
-            prev_value = None  # Could fetch from DB, but simplified here
+            conn = psycopg2.connect(CONN_STR)
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT value
+                FROM water_quality
+                WHERE determinand = %s
+                AND value IS NOT NULL
+                ORDER BY sample_time DESC
+                LIMIT 1
+                """,
+                (ML_TARGET_DETERMINAND,)
+            )
+            row = cur.fetchone()
+            prev_value = float(row[0]) if row else 0.0 
+            cur.close()
             predicted, model_name = self._predict_with_best_model(sample_time, prev_value)
             
             self.prediction_count += 1
